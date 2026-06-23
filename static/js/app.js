@@ -547,6 +547,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnEngineDownload = document.getElementById('btn-engine-download');
     const btnEngineStart = document.getElementById('btn-engine-start');
     const btnEngineStop = document.getElementById('btn-engine-stop');
+    const btnAutostart = document.getElementById('btn-autostart');
 
     // ─── Engine Control ─────────────────────────────────
 
@@ -638,8 +639,48 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // ─── Auto-start ────────────────────────────────────
+    async function checkAutostart() {
+        try {
+            const resp = await fetch('/api/settings/autostart');
+            const data = await resp.json();
+            if (data.enabled) {
+                btnAutostart.className = 'btn btn-sm btn-success';
+                btnAutostart.textContent = '⏻ 开机自启 ✅';
+            } else {
+                btnAutostart.className = 'btn btn-sm btn-secondary';
+                btnAutostart.textContent = '⏻ 开机自启';
+            }
+        } catch(e) {}
+    }
+
+    btnAutostart.addEventListener('click', async () => {
+        const isEnabled = btnAutostart.textContent.includes('✅');
+        btnAutostart.disabled = true;
+        btnAutostart.textContent = '⏳ 处理中...';
+        try {
+            const resp = await fetch('/api/settings/autostart', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({enabled: !isEnabled}),
+            });
+            const data = await resp.json();
+            if (resp.ok) {
+                toast(data.message, 'success');
+                await checkAutostart();
+            } else {
+                toast(data.error || '设置失败', 'error');
+            }
+        } catch(e) {
+            toast('设置失败: ' + e.message, 'error');
+        } finally {
+            btnAutostart.disabled = false;
+        }
+    });
+
     // ─── Init ────────────────────────────────────────────
     checkEngineStatus();
+    checkAutostart();
     loadGroups();
 
     // Auto-refresh every 60s

@@ -628,6 +628,58 @@ def core_status():
         'binary_path': SING_BOX_PATH,
     })
 
+# ---------- Auto-start (crontab @reboot) ----------
+DAEMON_SCRIPT = os.path.join(basedir, 'start-daemon.sh')
+CRONTAB_MARKER = '# proxy-manager-autostart'
+
+def _autostart_crontab_entry():
+    """Return the crontab line for autostart."""
+    return f'@reboot cd {basedir} && bash {DAEMON_SCRIPT} > /tmp/proxy-manager-boot.log 2>&1 {CRONTAB_MARKER}'
+
+def _is_autostart_enabled():
+    """Check if autostart is configured in crontab."""
+    try:
+        result = subprocess.run(['crontab', '-l'], capture_output=True, text=True, timeout=5)
+        if result.returncode == 0:
+            return CRONTAB_MARKER in result.stdout
+    except: pass
+    return False
+
+def _set_autostart(enable: bool):
+    """Enable or disable autostart via crontab @reboot."""
+    try:
+        # Get current crontab
+        result = subprocess.run(['crontab', '-l'], capture_output=True, text=True, timeout=5)
+        if result.returncode == 0:
+            lines = result.stdout.splitlines()
+        else:
+            lines = []
+        # Remove existing autostart lines
+        lines = [l for l in lines if CRONTAB_MARKER not in l]
+        if enable:
+            lines.append(_autostart_crontab_entry())
+        # Write back
+        input_str = '\n'.join(lines) + '\n'
+        proc = subprocess.run(['crontab', '-'], input=input_str, capture_output=True, text=True, timeout=5)
+        return proc.returncode == 0
+    except Exception as e:
+        return False
+
+@app.route('/api/settings/autostart', methods=['GET'])
+def get_autostart():
+    enabled = _is_autostart_enabled()
+    return jsonify({'enabled': enabled})
+
+@app.route('/api/settings/autostart', methods=['POST'])
+def set_autostart():
+    data = request.get_json()
+    enable = data.get('enabled', True)
+    ok = _set_autostart(enable)
+    if ok:
+        return jsonify({'enabled': enable, 'message': '开机自启已' + ('开启' if enable else '关闭')})
+    else:
+        return jsonify({'error': '设置失败，请检查 crontab 权限'}), 500
+
 @app.route('/api/core/download', methods=['POST'])
 def core_download():
     """Download sing-box binary."""
