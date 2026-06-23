@@ -2,9 +2,11 @@
 
 > 自带代理引擎的多协议代理管理器 — 无需 Docker，一行命令部署
 
-**一键部署，开箱即用。** 支持 VLESS / VMess / Shadowsocks / Trojan / Hysteria2 / Tuic 六种协议。
+**一键部署，开箱即用。** 支持 VLESS / VMess / Shadowsocks / Trojan / Hysteria2 / Tuic 六种协议。自带 Web 管理界面，分组管理、连接测速、智能路由、全局代理一应俱全。
 
-## 快速开始
+---
+
+## 📦 快速开始
 
 ```bash
 git clone https://github.com/你的用户名/proxy-manager.git
@@ -12,62 +14,268 @@ cd proxy-manager
 bash setup.sh
 ```
 
-然后浏览器打开 `http://<你的IP>:5003`，点击 **⬇ 下载引擎** → **▶ 启动**，添加你的代理链接即可使用。
+等脚本跑完，浏览器打开 `http://<你的IP>:5003`：
 
-## 功能
+1. 点击 **⬇ 下载引擎** — 自动下载 sing-box 二进制
+2. 点击 **➕ 添加** — 粘贴你的代理链接（支持六种协议）
+3. 点击 **▶ 启动** — 代理即刻生效
 
-- ✨ **六种协议** — VLESS / VMess / Shadowsocks / Trojan / Hysteria2 / Tuic
-- 🔌 **自带代理引擎** — 基于 sing-box，无需 Docker 或第三方依赖
-- 🌐 **Web 管理界面** — 添加、分组、导入导出、测速，都在浏览器里完成
-- 📦 **一键部署** — `bash setup.sh` 全自动装好
-- 🔒 **代理入口** — SOCKS5 `:1080` + HTTP `:1081`，局域网全开放
+> `setup.sh` 会自动创建 Python 虚拟环境、安装依赖、启动 Web 服务。
 
-## 代理入口
+---
 
-| 协议 | 地址 | 用途 |
-|------|------|------|
-| SOCKS5 | `http://IP:1080` | 浏览器插件、终端 |
-| HTTP | `http://IP:1081` | Docker 拉镜像、HTTP 应用 |
-| SOCKS5 (本机) | `http://127.0.0.1:1080` | 宿主机本地 |
-| HTTP (本机) | `http://127.0.0.1:1081` | 宿主机本机 |
+## 📖 完整使用教程
 
-> 把 `IP` 换成你机器的局域网地址。
+### 一、添加代理链接
 
-## 手动部署
+支持六种协议的分享链接格式，直接粘贴即可：
+
+| 协议 | 链接格式示例 |
+|------|-------------|
+| **VLESS** | `vless://uuid@server:port?security=reality&flow=...` |
+| **VMess** | `vmess://base64编码的JSON` |
+| **Shadowsocks** | `ss://base64加密方法:密码@server:port` |
+| **Trojan** | `trojan://密码@server:port?security=tls` |
+| **Hysteria2** | `hysteria2://密码@server:port?insecure=1` |
+| **Tuic** | `tuic://uuid@server:port?congestion_control=bbr` |
+
+**操作步骤：**
+- 点击工具栏 **➕ 添加** → 粘贴链接 → 选择分组 → 确认
+- 也可以点击 **📥 导入**，批量粘贴多行链接，或上传文件
+
+### 二、分组管理
+
+每个分组包含一组代理，方便按用途分类（如：香港节点、美国节点、游戏加速等）。
+
+**操作：**
+- **创建分组**：点击 **📁 分组** 输入名称即可
+- **重命名/删除**：点击分组右上角 **✏️**
+- **拖拽排序**：拖动分组左侧 `☰` 图标，或拖动代理左侧 `⠿` 图标
+- **设置默认出口**：点击代理右侧的 ⭐ 星标，该代理将作为分组默认出口
+
+### 三、连接测试
+
+点击任意代理右侧的 **🧪** 按钮，系统会自动测试：
+
+- **TCP 协议**（VLESS、VMess、Shadowsocks、Trojan）：TCP 端口连通性 + 延迟
+- **UDP 协议**（Hysteria2、Tuic）：UDP 发包测试 + TCP 443 回退延迟
+- **DNS 解析** + **ICMP Ping**
+
+测试结果会显示延迟毫秒数，并自动存入数据库。
+
+**全局测速：** 点击 **🌐 全局测速** 一次性测试所有已启用代理。
+
+### 四、智能路由 🤖
+
+> 自动选择延迟最低的节点，某个节点挂了会自动切换到下一个。
+
+**启用方法：**
+1. 先点击 **🌐 全局测速** 让所有代理都有延迟数据
+2. 点击分组右上角的 **📡 手动** → 切换为 **🤖 智能**
+3. sing-box 会每 3 分钟自动检测一次延迟，自动走最快的节点
+
+**工作原理：**
+- 使用 sing-box 原生 `url-test` outbound
+- 检测目标：`https://www.gstatic.com/generate_204`
+- 间隔：3 分钟
+- 容忍度：50ms（延迟差在 50ms 内的节点视为同等速度，减少无谓切换）
+
+### 五、全局代理 🌍
+
+> 一键开启系统级代理，所有终端命令自动走代理。
+
+**操作方法：** 点击工具栏 **🌍 全局代理 · OFF** → 切换为 **🌍 全局代理 · ON**
+
+**开启后生效的环境变量：**
 
 ```bash
-# 1. 安装依赖
+export http_proxy=http://127.0.0.1:1081
+export https_proxy=http://127.0.0.1:1081
+export ALL_PROXY=socks5://127.0.0.1:1080
+export NO_PROXY=localhost,127.0.0.1,.local,192.168.0.0/16
+```
+
+**生效范围：**
+- 新打开的终端会话自动加载（写入 `~/.profile`）
+- 已打开的终端需要执行 `source ~/.profile` 或重新打开
+- 重启后状态保留
+
+### 六、引擎控制
+
+| 功能 | 操作 |
+|------|------|
+| **下载引擎** | 点击 **⬇ 下载引擎**（仅首次需要） |
+| **启动代理** | 点击 **▶ 启动** |
+| **停止代理** | 点击 **⏹ 停止** |
+| **开机自启** | 点击 **⏻ 开机自启**（绿色 ✅ 即已开启） |
+
+**开机自启原理：** 写入 crontab `@reboot` 条目，系统启动后自动运行 `start-daemon.sh`。
+
+### 七、导入导出
+
+- **📥 导入**：粘贴多行链接，或拖拽文件到上传区域，批量导入
+- **📤 导出**：导出全部链接为文本，或选择一个分组导出 sing-box 配置
+- 导入时会自动去重（按链接内容对比）
+
+### 八、Docker 使用代理
+
+如果你在 NAS 上跑 Docker 容器，想让容器走代理拉镜像：
+
+```bash
+# 在 Docker 配置中设置 HTTP 代理
+mkdir -p /etc/systemd/system/docker.service.d
+cat > /etc/systemd/system/docker.service.d/proxy.conf <<EOF
+[Service]
+Environment="HTTP_PROXY=http://192.168.31.239:1081"
+Environment="HTTPS_PROXY=http://192.168.31.239:1081"
+Environment="NO_PROXY=localhost,127.0.0.1,.local"
+EOF
+systemctl daemon-reload
+systemctl restart docker
+```
+
+> 注意：Docker 拉镜像必须用 **HTTP 端口 1081**，不能用 SOCKS5 的 1080。
+
+---
+
+## 🔌 端口速查
+
+| 端口 | 协议 | 用途 | 绑定地址 |
+|------|------|------|---------|
+| `5003` | HTTP | Web 管理界面 | `0.0.0.0` |
+| `1080` | SOCKS5 | 代理入口（浏览器/终端） | `0.0.0.0` |
+| `1081` | HTTP/SOCKS 混合 | 代理入口（Docker/HTTP 应用） | `0.0.0.0` |
+
+> 监听 `0.0.0.0` 意味着局域网内所有设备都可以连接。**请仅在可信内网使用。**
+
+### 本机连接
+
+```bash
+# SOCKS5
+curl -x socks5://127.0.0.1:1080 http://ip.sb
+
+# HTTP
+curl -x http://127.0.0.1:1081 http://ip.sb
+```
+
+### 局域网其他设备连接
+
+```bash
+curl -x http://192.168.31.239:1081 http://ip.sb
+```
+
+---
+
+## 📁 项目结构
+
+```
+proxy-manager/
+├── app.py              # Flask 后端（全部 API + sing-box 管理）
+├── setup.sh            # 一键部署脚本
+├── start-daemon.sh     # 开机自启守护脚本
+├── requirements.txt    # Python 依赖
+├── static/
+│   ├── css/style.css   # 样式
+│   └── js/app.js       # 前端逻辑
+├── templates/
+│   └── index.html      # 主页面
+├── bin/                # sing-box 引擎目录（运行时下载）
+├── data/               # SQLite 数据库（运行时生成）
+├── .gitignore
+├── LICENSE             # MIT
+└── README.md
+```
+
+---
+
+## ⚙️ 手动部署
+
+如果你不想用 `setup.sh`，也可以手动操作：
+
+```bash
+# 1. 安装 Python 依赖
 pip install flask flask-sqlalchemy
 
-# 2. 启动
+# 2. 启动 Web 服务
 python3 app.py
 
-# 3. 下载引擎（网页上点 下载引擎 按钮，或）
+# 3. 下载引擎（通过 API 或网页按钮）
 curl -X POST http://127.0.0.1:5003/api/core/download
 
 # 4. 启动代理
 curl -X POST http://127.0.0.1:5003/api/core/start
+
+# 5. 查看状态
+curl -s http://127.0.0.1:5003/api/core/status | python3 -m json.tool
 ```
 
-## 项目结构
+---
 
-```
-proxy-manager/
-├── app.py              # Flask 后端（API + 代理管理）
-├── setup.sh            # 一键部署脚本
-├── requirements.txt    # Python 依赖
-├── static/             # 前端样式和脚本
-├── templates/          # 前端页面
-├── bin/                # sing-box 引擎（运行后自动下载）
-└── data/               # SQLite 数据库（运行时生成）
-```
+## 🛠️ API 参考
 
-## 技术栈
+| 方法 | 端点 | 用途 |
+|------|------|------|
+| GET | `/api/groups` | 获取所有分组及代理 |
+| POST | `/api/groups` | 创建分组 |
+| PUT | `/api/groups/<id>` | 更新分组（名称、默认出口、路由模式） |
+| DELETE | `/api/groups/<id>` | 删除分组 |
+| POST | `/api/links` | 添加代理链接 |
+| PUT | `/api/links/<id>` | 更新代理 |
+| DELETE | `/api/links/<id>` | 删除代理 |
+| POST | `/api/links/<id>/test` | 测试单个代理 |
+| POST | `/api/links/test-all` | 批量测试所有启用代理 |
+| GET | `/api/links/export` | 导出链接文本 |
+| POST | `/api/links/import` | 批量导入链接 |
+| GET | `/api/core/status` | 引擎运行状态 |
+| POST | `/api/core/start` | 启动代理引擎 |
+| POST | `/api/core/stop` | 停止代理引擎 |
+| GET | `/api/core/config` | 下载当前 sing-box 配置 |
+| POST | `/api/core/download` | 下载/更新 sing-box 二进制 |
+| GET | `/api/settings/autostart` | 开机自启状态 |
+| POST | `/api/settings/autostart` | 设置开机自启 |
+| GET | `/api/settings/global-proxy` | 全局代理状态 |
+| POST | `/api/settings/global-proxy` | 切换全局代理 |
+
+---
+
+## 🔧 常见问题
+
+### Q: 测速显示 "Timeout" 或连接失败
+- 检查代理链接是否有效
+- Hysteria2/Tuic 是 UDP 协议，TCP 测速会超时，这是正常的
+- 不同的代理节点可能被墙，换一个试试
+
+### Q: 开机自启无法设置
+- 确保当前用户有 crontab 权限
+- 可以手动添加 `@reboot` 到 crontab
+
+### Q: Docker 拉镜像速度慢
+- 确认使用 HTTP 端口 `1081`（SOCKS5 的 1080 对 Docker 支持不佳）
+- 参考上方「Docker 使用代理」章节配置
+
+### Q: Global Proxy 开启了但终端不走代理
+- 新终端才生效，老终端执行 `source ~/.profile`
+- 检查环境变量：`echo $http_proxy`
+
+---
+
+## 🧪 技术栈
 
 - **后端**：Python Flask + SQLAlchemy + SQLite
 - **前端**：原生 HTML / CSS / JavaScript
-- **代理引擎**：sing-box（Go 语言，单文件二进制）
+- **代理引擎**：[sing-box](https://github.com/SagerNet/sing-box) v1.13+（Go 语言，单文件静态二进制）
+- **开源协议**：MIT
 
-## 许可证
+---
 
-MIT
+## ⚠️ 安全须知
+
+- 管理界面**无密码认证**，默认全开放。**请仅在可信内网使用。**
+- 建议通过防火墙限制管理端口 5003 的访问来源
+- 代理端口（1080/1081）监听 `0.0.0.0`，局域网内所有设备均可连接
+
+---
+
+## 📄 许可证
+
+MIT License — 随便用，随便改，随便分享。
