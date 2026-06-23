@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>代理管理器 · 小不点</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+<div id="app">
+    <!-- Toast -->
+    <div id="toast" class="toast"></div>
+
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <h1>🛡️ 代理管理器</h1>
+            <p class="subtitle">多协议 · 分组管理 · 一键部署 · 连接测试</p>
+        </header>
+
+        <!-- Main actions -->
+        <div class="toolbar">
+            <button id="btn-add-link" class="btn btn-primary">➕ 添加</button>
+            <button id="btn-import" class="btn btn-secondary">📥 导入</button>
+            <button id="btn-export" class="btn btn-secondary">📤 导出</button>
+            <button id="btn-add-group" class="btn btn-secondary">📁 分组</button>
+            <button id="btn-test-all" class="btn btn-secondary">🌐 全局测速</button>
+        </div>
+
+        <!-- Proxy Engine Control Panel -->
+        <div class="engine-panel">
+            <div class="engine-info">
+                <span id="engine-status-badge" class="badge badge-offline">⏻ 停止</span>
+                <span id="engine-status-text" class="engine-text">代理引擎: <strong>sing-box</strong></span>
+                <span id="engine-pid" class="engine-pid"></span>
+            </div>
+            <div class="engine-actions">
+                <button id="btn-engine-download" class="btn btn-sm btn-secondary">⬇ 下载引擎</button>
+                <button id="btn-engine-start" class="btn btn-sm btn-success" disabled>▶ 启动</button>
+                <button id="btn-engine-stop" class="btn btn-sm btn-danger" disabled>⏹ 停止</button>
+            </div>
+        </div>
+
+        <!-- Groups Container -->
+        <div id="groups-container">
+            <div class="loading">加载中...</div>
+        </div>
+
+        <!-- Footer guide -->
+        <footer class="guide">
+            <details>
+                <summary>📖 使用指南</summary>
+                <ol>
+                    <li><strong>添加代理</strong> — 支持 VLESS / VMess / Shadowsocks / Trojan / Hysteria2 / Tuic</li>
+                    <li><strong>导入/导出</strong> — 批量导入链接（每行一个），导出全部链接</li>
+                    <li><strong>引擎控制</strong> — 下载 sing-box → 启动 → 代理即生效</li>
+                    <li><strong>连接测试</strong> — 点击 🧪 测试每个代理的连通性和延迟</li>
+                    <li>每个分组可标记 <strong>⭐ 默认出口</strong>，路由自动优先</li>
+                </ol>
+                <hr style="margin:0.8rem 0;border-color:rgba(255,255,255,0.1);">
+                <h4 style="margin-bottom:0.5rem;font-size:0.9rem;color:#a0aec0;">🔗 代理入口（重启后端口不变）</h4>
+                <table style="width:100%;border-collapse:collapse;font-size:0.85rem;">
+                    <thead><tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
+                        <th style="padding:0.3rem 0.5rem;text-align:left;color:#a0aec0;">协议</th>
+                        <th style="padding:0.3rem 0.5rem;text-align:left;color:#a0aec0;">地址</th>
+                        <th style="padding:0.3rem 0.5rem;text-align:left;color:#a0aec0;">适用场景</th>
+                    </tr></thead>
+                    <tbody>
+                        <tr><td style="padding:0.3rem 0.5rem;">SOCKS5</td>
+                            <td style="padding:0.3rem 0.5rem;"><code>http://IP:1080</code></td>
+                            <td style="padding:0.3rem 0.5rem;">浏览器插件（SwitchyOmega）、终端</td></tr>
+                        <tr><td style="padding:0.3rem 0.5rem;">HTTP</td>
+                            <td style="padding:0.3rem 0.5rem;"><code>http://IP:1081</code></td>
+                            <td style="padding:0.3rem 0.5rem;"><strong>Docker 拉镜像</strong>、仅 HTTP 的应用</td></tr>
+                        <tr><td style="padding:0.3rem 0.5rem;">SOCKS5 本机</td>
+                            <td style="padding:0.3rem 0.5rem;"><code>http://127.0.0.1:1080</code></td>
+                            <td style="padding:0.3rem 0.5rem;">宿主机本地应用、host 网络模式的容器</td></tr>
+                        <tr><td style="padding:0.3rem 0.5rem;">HTTP 本机</td>
+                            <td style="padding:0.3rem 0.5rem;"><code>http://127.0.0.1:1081</code></td>
+                            <td style="padding:0.3rem 0.5rem;">宿主机本机 HTTP 请求</td></tr>
+                    </tbody>
+                </table>
+                <p style="margin-top:0.5rem;font-size:0.8rem;color:#4a5568;">
+                    💡 所有端口监听在 <code>0.0.0.0</code>，局域网内任何设备把 <code>IP</code> 换成对应设备的地址即可使用。<br>
+                    ⚠️ 无认证，请仅在可信内网使用。如要公网访问请配置防火墙或加密码。
+                </p>
+            </details>
+        </footer>
+    </div>
+
+    <!-- Add Link Modal -->
+    <div id="modal-add-link" class="modal-overlay hidden">
+        <div class="modal">
+            <h2>➕ 添加代理</h2>
+            <div class="modal-body">
+                <label for="add-url">代理链接</label>
+                <input type="text" id="add-url" placeholder="vless:// / vmess:// / ss:// / trojan:// / hysteria2:// / tuic://">
+                <label for="add-group">所属分组</label>
+                <select id="add-group"></select>
+            </div>
+            <p id="add-preview" class="preview"></p>
+            <div class="modal-actions">
+                <button id="modal-add-cancel" class="btn btn-secondary">取消</button>
+                <button id="modal-add-confirm" class="btn btn-primary">确认添加</button>
+            </div>
+            <div id="add-message" class="message"></div>
+        </div>
+    </div>
+
+    <!-- Import Modal -->
+    <div id="modal-import" class="modal-overlay hidden">
+        <div class="modal modal-wide">
+            <h2>📥 批量导入</h2>
+            <div class="modal-body">
+                <label for="import-text">粘贴代理链接（每行一个）或拖入 <code>.txt</code> / <code>.json</code> 文件</label>
+                <textarea id="import-text" rows="8" placeholder="vless://...&#10;vmess://...&#10;ss://...&#10;"></textarea>
+                <label for="import-group">导入到分组</label>
+                <select id="import-group"></select>
+                <div class="file-drop-zone" id="import-dropzone">
+                    📂 点击选择文件或拖拽文件到此处
+                    <input type="file" id="import-file" accept=".txt,.json" hidden>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button id="modal-import-cancel" class="btn btn-secondary">取消</button>
+                <button id="modal-import-confirm" class="btn btn-primary">开始导入</button>
+            </div>
+            <div id="import-message" class="message"></div>
+        </div>
+    </div>
+
+    <!-- Edit Group Modal -->
+    <div id="modal-edit-group" class="modal-overlay hidden">
+        <div class="modal">
+            <h2>📁 编辑分组</h2>
+            <div class="modal-body">
+                <label for="edit-group-name">分组名称</label>
+                <input type="text" id="edit-group-name" placeholder="分组名称">
+            </div>
+            <div class="modal-actions">
+                <button id="modal-edit-group-cancel" class="btn btn-secondary">取消</button>
+                <button id="modal-edit-group-confirm" class="btn btn-primary">保存</button>
+                <button id="modal-edit-group-delete" class="btn btn-danger" style="margin-left:auto;">🗑 删除分组</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

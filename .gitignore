@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+
+# 运行时数据
+data/proxies.db
+data/*.db
+
+# 代理引擎二进制（用户自行下载）
+bin/sing-box
+bin/sing-box.log
+bin/sing-box.pid
+bin/config.json
+
+# 系统
+.DS_Store
+Thumbs.db
+*.log
+/tmp/
