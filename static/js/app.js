@@ -48,6 +48,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnExport = document.getElementById('btn-export');
     const btnAddGroup = document.getElementById('btn-add-group');
     const btnTestAll = document.getElementById('btn-test-all');
+    const btnGlobalProxy = document.getElementById('btn-global-proxy');
 
     // ─── Toast ───────────────────────────────────────────
     function toast(text, type = 'info', duration = 3000) {
@@ -684,9 +685,49 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // ─── Global Proxy ────────────────────────────────────
+    async function checkGlobalProxy() {
+        try {
+            const resp = await fetch('/api/settings/global-proxy');
+            const data = await resp.json();
+            if (data.enabled) {
+                btnGlobalProxy.className = 'btn btn-sm btn-success';
+                btnGlobalProxy.textContent = '🌍 全局代理 · ON';
+            } else {
+                btnGlobalProxy.className = 'btn btn-secondary';
+                btnGlobalProxy.textContent = '🌍 全局代理 · OFF';
+            }
+        } catch(e) {}
+    }
+
+    btnGlobalProxy.addEventListener('click', async () => {
+        const isEnabled = btnGlobalProxy.textContent.includes('ON');
+        btnGlobalProxy.disabled = true;
+        btnGlobalProxy.textContent = '⏳ 处理中...';
+        try {
+            const resp = await fetch('/api/settings/global-proxy', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({enabled: !isEnabled}),
+            });
+            const data = await resp.json();
+            if (resp.ok) {
+                toast(data.message, 'success');
+                await checkGlobalProxy();
+            } else {
+                toast(data.error || '设置失败', 'error');
+            }
+        } catch(e) {
+            toast('设置失败: ' + e.message, 'error');
+        } finally {
+            btnGlobalProxy.disabled = false;
+        }
+    });
+
     // ─── Init ────────────────────────────────────────────
     checkEngineStatus();
     checkAutostart();
+    checkGlobalProxy();
     loadGroups();
 
     // Auto-refresh every 60s

@@ -29,6 +29,8 @@ SING_BOX_PATH = os.path.join(BIN_DIR, 'sing-box')
 CONFIG_PATH = os.path.join(BIN_DIR, 'config.json')
 LOG_PATH = os.path.join(BIN_DIR, 'sing-box.log')
 PID_PATH = os.path.join(BIN_DIR, 'sing-box.pid')
+GLOBAL_PROXY_FILE = os.path.join(basedir, 'data', 'global_proxy')
+PROXY_PROFILE = '/etc/profile.d/proxy-manager.sh'
 
 os.makedirs(BIN_DIR, exist_ok=True)
 
@@ -775,6 +777,109 @@ def set_autostart():
         return jsonify({'enabled': enable, 'message': '开机自启已' + ('开启' if enable else '关闭')})
     else:
         return jsonify({'error': '设置失败，请检查 crontab 权限'}), 500
+
+
+# ---------- Global Proxy (system-wide env vars) ----------
+
+def _get_global_proxy_status():
+    enabled = os.path.exists(GLOBAL_PROXY_FILE)
+    env_vars = {}
+    if enabled:
+        try:
+            with open(GLOBAL_PROXY_FILE) as f:
+                for line in f:
+                    if '=' in line:
+                        k, v = line.strip().split('=', 1)
+                        env_vars[k] = v
+        except:
+            pass
+    return enabled, env_vars
+
+def _set_global_proxy(enable):
+    env_content = (
+        '# Proxy Manager - Global Proxy Settings (sourced by start-daemon.sh)\n'
+        'export http_proxy=http://127.0.0.1:1081\n'
+        'export https_proxy=http://127.0.0.1:1081\n'
+        'export ftp_proxy=http://127.0.0.1:1081\n'
+        'export ALL_PROXY=socks5://127.0.0.1:1080\n'
+        'export NO_PROXY=localhost,127.0.0.1,.local,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16\n'
+    )
+    if enable:
+        try:
+            with open(GLOBAL_PROXY_FILE, 'w') as f:
+                f.write(env_content)
+        except:
+            return False
+        # Try system-wide profile (may fail without root, that's OK)
+        try:
+            with open(PROXY_PROFILE, 'w') as f:
+                f.write(env_content)
+            os.system(f'chmod +x {PROXY_PROFILE} 2>/dev/null')
+        except:
+            pass
+        # Also try user's .profile
+        try:
+            home = os.environ.get('HOME', '/root')
+            user_profile = os.path.join(home, '.profile')
+            with open(user_profile) as f:
+                up_content = f.read()
+            marker = '# PROXY MANAGER'
+            if marker not in up_content:
+                with open(user_profile, 'a') as f:
+                    f.write('\n' + env_content)
+        except:
+            pass
+    else:
+        try:
+            if os.path.exists(GLOBAL_PROXY_FILE):
+                os.remove(GLOBAL_PROXY_FILE)
+        except:
+            return False
+        for p in [PROXY_PROFILE]:
+            try:
+                if os.path.exists(p):
+                    os.remove(p)
+            except:
+                pass
+        # Remove from user .profile
+        try:
+            home = os.environ.get('HOME', '/root')
+            user_profile = os.path.join(home, '.profile')
+            if os.path.exists(user_profile):
+                with open(user_profile) as f:
+                    lines = f.readlines()
+                keep = []
+                skip = False
+                for line in lines:
+                    if '# PROXY MANAGER' in line:
+                        skip = True
+                    if skip and line.strip() == '':
+                        skip = False
+                        continue
+                    if not skip:
+                        keep.append(line)
+                with open(user_profile, 'w') as f:
+                    f.writelines(keep)
+        except:
+            pass
+    return True
+
+@app.route('/api/settings/global-proxy', methods=['GET'])
+def get_global_proxy():
+    enabled, env_vars = _get_global_proxy_status()
+    return jsonify({'enabled': enabled, 'env_vars': env_vars, 'env_path': GLOBAL_PROXY_FILE})
+
+@app.route('/api/settings/global-proxy', methods=['POST'])
+def set_global_proxy():
+    data = request.get_json()
+    enable = data.get('enabled', True)
+    ok = _set_global_proxy(enable)
+    if ok:
+        msg = '🌍 全局代理已开启，终端新会话自动生效。' if enable else '🌍 全局代理已关闭，环境变量已清除。'
+        return jsonify({'enabled': enable, 'message': msg})
+    else:
+        return jsonify({'error': '设置失败'}), 500
+
 
 @app.route('/api/core/download', methods=['POST'])
 def core_download():

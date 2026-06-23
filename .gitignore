@@ -18,3 +18,4 @@ bin/config.json
 Thumbs.db
 *.log
 /tmp/
+global_proxy

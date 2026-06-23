@@ -25,6 +25,7 @@
             <button id="btn-export" class="btn btn-secondary">📤 导出</button>
             <button id="btn-add-group" class="btn btn-secondary">📁 分组</button>
             <button id="btn-test-all" class="btn btn-secondary">🌐 全局测速</button>
+            <button id="btn-global-proxy" class="btn btn-secondary" title="设置系统环境变量 http_proxy/ALL_PROXY，终端命令自动走代理">🌍 全局代理 · OFF</button>
         </div>
 
         <!-- Proxy Engine Control Panel -->
@@ -57,6 +58,13 @@
                     <li><strong>引擎控制</strong> — 下载 sing-box → 启动 → 代理即生效</li>
                     <li><strong>连接测试</strong> — 点击 🧪 测试每个代理的连通性和延迟</li>
                     <li>每个分组可标记 <strong>⭐ 默认出口</strong>，路由自动优先</li>
+                    <li><strong>🌍 全局代理</strong> — 开启后写入系统环境变量，终端新会话自动走代理：</li>
+                    <ul style="margin:0 0 0.5rem 1.5rem; font-size:0.85rem; color:#a0aec0;">
+                        <li><code>http_proxy=http://127.0.0.1:1081</code></li>
+                        <li><code>https_proxy=http://127.0.0.1:1081</code></li>
+                        <li><code>ALL_PROXY=socks5://127.0.0.1:1080</code></li>
+                        <li><code>NO_PROXY=localhost,127.0.0.1,192.168.x.x</code></li>
+                    </ul>
                 </ol>
                 <hr style="margin:0.8rem 0;border-color:rgba(255,255,255,0.1);">
                 <h4 style="margin-bottom:0.5rem;font-size:0.9rem;color:#a0aec0;">🔗 代理入口（重启后端口不变）</h4>
