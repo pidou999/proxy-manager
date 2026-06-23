@@ -173,6 +173,7 @@ proxy-manager/
 ├── app.py              # Flask 后端（全部 API + sing-box 管理）
 ├── setup.sh            # 一键部署脚本
 ├── start-daemon.sh     # 开机自启守护脚本
+├── uninstall.sh        # 一键卸载脚本
 ├── requirements.txt    # Python 依赖
 ├── static/
 │   ├── css/style.css   # 样式
@@ -208,6 +209,28 @@ curl -X POST http://127.0.0.1:5003/api/core/start
 # 5. 查看状态
 curl -s http://127.0.0.1:5003/api/core/status | python3 -m json.tool
 ```
+
+---
+
+## 🗑️ 一键卸载
+
+```bash
+cd proxy-manager
+bash uninstall.sh
+```
+
+脚本会自动执行以下操作：
+
+1. **停止 Web 服务** — 终止 Flask 进程
+2. **停止代理引擎** — 终止 sing-box 进程
+3. **清理 crontab 开机自启** — 移除 `@reboot` 条目
+4. **清理全局代理变量** — 删除 `/etc/profile.d/proxy-manager.sh` 和 `~/.profile` 中的代理设置
+5. **可选删除项目目录** — 询问是否删除整个项目
+
+> 如果终端当前会话还设置了代理环境变量，卸载后执行：
+> ```bash
+> unset http_proxy https_proxy ftp_proxy ALL_PROXY
+> ```
 
 ---
 
