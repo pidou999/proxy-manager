@@ -38,6 +38,8 @@ class ProxyGroup(db.Model):
     name = db.Column(db.String(128), nullable=False, default='默认分组')
     sort_order = db.Column(db.Integer, default=0)
     default_proxy_id = db.Column(db.Integer, db.ForeignKey('proxy_link.id'), nullable=True)
+    routing_mode = db.Column(db.String(16), default='manual')  # 'manual' or 'auto'
+    smart_proxy_ids = db.Column(db.Text, nullable=True)  # JSON list of proxy ids for smart routing
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     proxies = db.relationship('ProxyLink', backref='group', lazy='dynamic',
                               foreign_keys='ProxyLink.group_id',
@@ -60,6 +62,7 @@ class ProxyLink(db.Model):
     sid = db.Column(db.String(64), default='')
     fp = db.Column(db.String(64), default='')
     enabled = db.Column(db.Boolean, default=True)
+    latency_ms = db.Column(db.Float, nullable=True)
     sort_order = db.Column(db.Integer, default=0)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
@@ -250,10 +253,14 @@ def get_groups():
             'security': p.security, 'network': p.network, 'flow': p.flow,
             'sni': p.sni, 'pbk': p.pbk, 'sid': p.sid, 'fp': p.fp,
             'enabled': p.enabled, 'sort_order': p.sort_order,
+            'latency_ms': p.latency_ms,
             'is_default': (p.id == g.default_proxy_id),
         } for p in proxies]
         result.append({'id': g.id, 'name': g.name, 'sort_order': g.sort_order,
-                       'default_proxy_id': g.default_proxy_id, 'proxies': proxy_list})
+                       'default_proxy_id': g.default_proxy_id,
+                       'routing_mode': g.routing_mode or 'manual',
+                       'smart_proxy_ids': json.loads(g.smart_proxy_ids) if g.smart_proxy_ids else [],
+                       'proxies': proxy_list})
     return jsonify(result)
 
 @app.route('/api/groups', methods=['POST'])
@@ -272,6 +279,8 @@ def update_group(gid):
     data = request.get_json()
     if 'name' in data: group.name = data['name'].strip()
     if 'default_proxy_id' in data: group.default_proxy_id = data['default_proxy_id']
+    if 'routing_mode' in data: group.routing_mode = data['routing_mode']
+    if 'smart_proxy_ids' in data: group.smart_proxy_ids = json.dumps(data['smart_proxy_ids'])
     db.session.commit()
     return jsonify({'message': 'Updated'})
 
@@ -431,7 +440,55 @@ def test_proxy(lid):
         except Exception as e:
             results['tcp'] = {'reachable': False, 'latency_ms': None, 'message': str(e)}
         finally: tcp_sock.close()
+
+    # Store latency in DB
+    for key in ('tcp', 'udp', 'icmp'):
+        if key in results and results[key].get('latency_ms'):
+            link.latency_ms = results[key]['latency_ms']
+            break
+    db.session.commit()
+
     return jsonify(results)
+
+
+@app.route('/api/links/test-all', methods=['POST'])
+def test_all_proxies():
+    """Test all enabled proxies and store latency, return results."""
+    import socket as sock_mod
+    proxies = ProxyLink.query.filter_by(enabled=True).order_by(ProxyLink.sort_order).all()
+    total = len(proxies)
+    reachable = 0
+    results = []
+    for link in proxies:
+        host = link.server
+        port = link.port
+        if not host or not port:
+            continue
+        # Quick TCP test
+        latency = None
+        try:
+            tcp_sock = sock_mod.socket(sock_mod.AF_INET, sock_mod.SOCK_STREAM)
+            tcp_sock.settimeout(5)
+            tcp_start = time.time()
+            tcp_sock.connect((host, port))
+            tcp_sock.close()
+            latency = round((time.time()-tcp_start)*1000, 1)
+            reachable += 1
+        except:
+            pass
+        if latency:
+            link.latency_ms = latency
+        results.append({
+            'id': link.id,
+            'ps': link.ps,
+            'protocol': link.protocol,
+            'server': host,
+            'port': port,
+            'latency_ms': latency,
+            'reachable': latency is not None,
+        })
+    db.session.commit()
+    return jsonify({'total': total, 'reachable': reachable, 'results': results})
 
 # ---------- sing-box Config Generator ----------
 def build_sing_outbound(proxy: ProxyLink):
@@ -535,33 +592,77 @@ def build_sing_outbound(proxy: ProxyLink):
 
 
 def generate_sing_config():
-    """Generate sing-box config from all enabled proxies."""
+    """Generate sing-box config from all enabled proxies.
+    
+    - Groups with routing_mode='auto' → url-test outbound (auto-select fastest)
+    - Groups with routing_mode='manual' → single default proxy
+    """
     proxies = ProxyLink.query.filter_by(enabled=True).order_by(ProxyLink.sort_order).all()
     if not proxies:
         return None
 
+    groups = ProxyGroup.query.order_by(ProxyGroup.sort_order).all()
     outbounds = []
-    primary_tag = None
-    for p in proxies:
-        ob = build_sing_outbound(p)
-        if ob:
-            outbounds.append(ob)
-            if primary_tag is None:
-                primary_tag = ob['tag']
+    route_rules = []
+
+    for g in groups:
+        group_proxies = [p for p in proxies if p.group_id == g.id]
+        if not group_proxies:
+            continue
+
+        # Build individual outbounds for all proxies in this group
+        group_tags = []
+        for p in group_proxies:
+            ob = build_sing_outbound(p)
+            if ob:
+                outbounds.append(ob)
+                group_tags.append(ob['tag'])
+
+        if g.routing_mode == 'auto':
+            # Create url-test outbound for this group
+            auto_tag = f'auto-group-{g.id}'
+            url_test_out = {
+                "type": "urltest",
+                "tag": auto_tag,
+                "outbounds": group_tags,
+                "url": "https://www.gstatic.com/generate_204",
+                "interval": "3m",
+                "tolerance": 50,
+            }
+            outbounds.append(url_test_out)
+            route_rules.append({
+                "inbound": ["socks-in", "mixed-in"],
+                "outbound": auto_tag,
+            })
+        else:
+            # Manual mode: use default_proxy_id or first proxy
+            target_tag = None
+            if g.default_proxy_id:
+                for t in group_tags:
+                    if t == f'proxy-{g.default_proxy_id}':
+                        target_tag = t
+                        break
+            if not target_tag and group_tags:
+                target_tag = group_tags[0]
+            if target_tag:
+                route_rules.append({
+                    "inbound": ["socks-in", "mixed-in"],
+                    "outbound": target_tag,
+                })
 
     if not outbounds:
         return None
 
-    # Check group default proxy
-    groups = ProxyGroup.query.all()
-    for g in groups:
-        if g.default_proxy_id:
-            for ob in outbounds:
-                if ob['tag'] == f'proxy-{g.default_proxy_id}':
-                    primary_tag = ob['tag']
-                    break
-
     outbounds.append({"type": "direct", "tag": "direct"})
+
+    # If no route rules, use first available outbound
+    if not route_rules:
+        proxy_outbounds = [o for o in outbounds if o['type'] != 'direct']
+        if proxy_outbounds:
+            route_rules.append({
+                "inbound": ["socks-in", "mixed-in"],
+                "outbound": proxy_outbounds[0]['tag'],
+            })
 
     config = {
         "log": {
@@ -586,13 +687,8 @@ def generate_sing_config():
         ],
         "outbounds": outbounds,
         "route": {
-            "rules": [
-                {
-                    "inbound": ["socks-in", "mixed-in"],
-                    "outbound": primary_tag or "direct"
-                }
-            ]
-        }
+            "rules": route_rules
+        },
     }
     return config
 

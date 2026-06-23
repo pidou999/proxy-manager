@@ -99,13 +99,21 @@ document.addEventListener('DOMContentLoaded', () => {
             const proxyItems = g.proxies.map((p) => {
                 const iconClass = `icon-${p.protocol}`;
                 const disabledClass = !p.enabled ? 'disabled' : '';
-                const testBadge = recentTestResults[p.id]
-                    ? (recentTestResults[p.id].reachable
-                        ? (recentTestResults[p.id].latency_ms != null
-                            ? `<span class="latency-badge">⚡ ${recentTestResults[p.id].latency_ms}ms</span>`
-                            : `<span class="latency-badge" style="background:rgba(102,126,234,0.2);color:#a0aec0;">✅ 可达</span>`)
-                        : `<span class="latency-error">⚠️ ${recentTestResults[p.id].shortMsg || 'error'}</span>`)
-                    : '';
+                // Latency badge: prefer recent test, fallback to stored latency
+                let latencyBadge = '';
+                const storedLat = p.latency_ms;
+                if (recentTestResults[p.id]) {
+                    const t = recentTestResults[p.id];
+                    if (t.reachable) {
+                        latencyBadge = t.latency_ms != null
+                            ? `<span class="latency-badge">⚡ ${t.latency_ms}ms</span>`
+                            : `<span class="latency-badge" style="background:rgba(102,126,234,0.2);color:#a0aec0;">✅ 可达</span>`;
+                    } else {
+                        latencyBadge = `<span class="latency-error">⚠️ ${t.shortMsg || 'error'}</span>`;
+                    }
+                } else if (storedLat != null) {
+                    latencyBadge = `<span class="latency-badge">⚡ ${storedLat}ms</span>`;
+                }
                 return `
                     <div class="proxy-item ${disabledClass}" data-id="${p.id}" data-group-id="${g.id}">
                         <span class="proxy-drag-handle">⠿</span>
@@ -119,7 +127,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 ${p.network ? `<span>📡 ${esc(p.network)}</span>` : ''}
                                 ${p.sni ? `<span>🎯 ${esc(p.sni)}</span>` : ''}
                                 ${p.pbk ? `<span>🔑 pbk</span>` : ''}
-                                ${testBadge}
+                                ${latencyBadge}
                             </div>
                         </div>
                         <div class="proxy-toggle">
@@ -136,6 +144,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 `;
             }).join('');
 
+            const smartMode = g.routing_mode === 'auto';
+            const smartBtnClass = smartMode ? 'btn-success' : 'btn-secondary';
+
             return `
                 <div class="group-card" data-group-id="${g.id}">
                     <div class="group-header">
@@ -143,6 +154,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <input class="group-name" value="${esc(g.name)}" data-id="${g.id}" readonly>
                         <span class="group-badge">${g.proxies.length} 个</span>
                         <div class="group-actions">
+                            <button class="btn btn-sm ${smartBtnClass} btn-smart" data-id="${g.id}" title="智能路由：自动选最快的节点">${smartMode ? '🤖 智能' : '📡 手动'}</button>
                             <button class="btn btn-secondary btn-sm btn-edit-group" data-id="${g.id}" title="编辑分组">✏️</button>
                             <button class="btn btn-success btn-sm btn-export-group" data-id="${g.id}" title="导出该分组配置">📥</button>
                         </div>
@@ -157,6 +169,7 @@ document.addEventListener('DOMContentLoaded', () => {
         groupsContainer.innerHTML = html;
         attachGroupEvents();
         attachProxyEvents();
+        attachSmartEvents();
     }
 
     function esc(text) {
@@ -313,6 +326,49 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // ─── Smart Routing ──────────────────────────────────
+    function attachSmartEvents() {
+        document.querySelectorAll('.btn-smart').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const gid = parseInt(btn.dataset.id);
+                const g = groups.find(x => x.id === gid);
+                if (!g) return;
+                const newMode = g.routing_mode === 'auto' ? 'manual' : 'auto';
+                btn.disabled = true;
+                btn.textContent = '⏳...';
+                try {
+                    const resp = await fetch(`/api/groups/${gid}`, {
+                        method: 'PUT',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ routing_mode: newMode })
+                    });
+                    if (resp.ok) {
+                        g.routing_mode = newMode;
+                        const label = newMode === 'auto' ? '🤖 智能' : '📡 手动';
+                        btn.className = `btn btn-sm ${newMode === 'auto' ? 'btn-success' : 'btn-secondary'} btn-smart`;
+                        btn.textContent = label;
+                        btn.dataset.mode = newMode;
+                        toast(`分组「${g.name}」已切换为${newMode === 'auto' ? '🤖 智能路由（自动选最快）' : '📡 手动选择'}`, 'success');
+                        // Regenerate config and restart sing-box
+                        await fetch('/api/core/stop', { method: 'POST' });
+                        const startRes = await fetch('/api/core/start', { method: 'POST' });
+                        const startData = await startRes.json();
+                        if (!startRes.ok) toast('重启 sing-box 失败: ' + (startData.error || 'unknown'), 'error');
+                    } else {
+                        const err = await resp.json();
+                        toast(err.error || '切换失败', 'error');
+                        btn.textContent = g.routing_mode === 'auto' ? '🤖 智能' : '📡 手动';
+                    }
+                } catch (err) {
+                    toast(err.message, 'error');
+                    btn.textContent = g.routing_mode === 'auto' ? '🤖 智能' : '📡 手动';
+                } finally {
+                    btn.disabled = false;
+                }
+            });
+        });
+    }
+
     // ─── Add Link ────────────────────────────────────────
     btnAddLink.addEventListener('click', () => {
         addUrl.value = '';
@@ -458,80 +514,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ─── Global Speed Test ──────────────────────────────────
     btnTestAll.addEventListener('click', async () => {
-        // Collect all proxy IDs
-        const allProxyIds = [];
-        for (const g of groups) {
-            for (const p of g.proxies) {
-                allProxyIds.push(p.id);
-            }
-        }
-        if (!allProxyIds.length) {
-            toast('没有代理可测试', 'info');
-            return;
-        }
-
         btnTestAll.disabled = true;
         btnTestAll.textContent = '⏳ 测速中...';
-        const total = allProxyIds.length;
-        let completed = 0;
-        let reachable = 0;
-
-        // Collect all .btn-test elements by mapping proxy IDs
-        const testButtons = {};
-        document.querySelectorAll('.btn-test').forEach(btn => {
-            testButtons[btn.dataset.id] = btn;
-        });
-
-        for (const pid of allProxyIds) {
-            const btn = testButtons[pid];
-            if (btn) {
-                btn.classList.add('testing');
-                btn.disabled = true;
-            }
-            try {
-                const res = await fetch(`/api/links/${pid}/test`, { method: 'POST' });
-                const data = await res.json();
-                completed++;
-
-                // Determine best result
-                let best = data.tcp || data.udp || data.icmp || null;
-                if (best && best.reachable) {
-                    reachable++;
-                    recentTestResults[pid] = {
-                        reachable: true,
-                        latency_ms: best.latency_ms,
-                        shortMsg: ''
-                    };
-                } else if (best) {
-                    recentTestResults[pid] = {
-                        reachable: false,
-                        latency_ms: null,
-                        shortMsg: best.message || 'unreachable'
-                    };
-                } else {
-                    recentTestResults[pid] = {
-                        reachable: false,
-                        latency_ms: null,
-                        shortMsg: 'No test data'
+        try {
+            const resp = await fetch('/api/links/test-all', { method: 'POST' });
+            const data = await resp.json();
+            if (resp.ok) {
+                for (const r of data.results) {
+                    recentTestResults[r.id] = {
+                        reachable: r.reachable,
+                        latency_ms: r.latency_ms,
+                        shortMsg: r.reachable ? '' : 'unreachable'
                     };
                 }
-            } catch (err) {
-                completed++;
-                recentTestResults[pid] = { reachable: false, latency_ms: null, shortMsg: err.message };
-            } finally {
-                if (btn) {
-                    btn.classList.remove('testing');
-                    btn.disabled = false;
-                }
-                // Update toolbar progress
-                btnTestAll.textContent = `⏳ ${completed}/${total}`;
+                await loadGroups();
+                toast(`测速完成：${data.reachable}/${data.total} 个可连接`, data.reachable > 0 ? 'success' : 'error');
+            } else {
+                toast(data.error || '测速失败', 'error');
             }
+        } catch (err) {
+            toast(err.message, 'error');
+        } finally {
+            btnTestAll.disabled = false;
+            btnTestAll.textContent = '🌐 全局测速';
         }
-
-        btnTestAll.disabled = false;
-        btnTestAll.textContent = '🌐 全局测速';
-        await loadGroups();
-        toast(`测速完成：${reachable}/${total} 个可连接`, reachable > 0 ? 'success' : 'error');
     });
 
     // ─── Close modals on overlay click ──────────────────

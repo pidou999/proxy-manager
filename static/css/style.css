@@ -339,3 +339,22 @@ header h1 { font-size: 2.5rem; background: linear-gradient(90deg, #667eea, #f093
     .proxy-item { flex-wrap: wrap; }
     .proxy-actions { margin-left: auto; }
 }
+
+/* ========== Latency Badge ========== */
+.latency-badge {
+    display: inline-block; padding: 0.1rem 0.4rem;
+    border-radius: 10px; font-size: 0.7rem; font-weight: 600;
+    background: rgba(72,187,120,0.15); color: #68d391;
+    margin-left: 0.3rem;
+}
+.latency-error {
+    display: inline-block; padding: 0.1rem 0.4rem;
+    border-radius: 10px; font-size: 0.7rem; font-weight: 600;
+    background: rgba(245,101,101,0.15); color: #fc8181;
+    margin-left: 0.3rem;
+}
+
+/* ========== Smart Routing ========== */
+.btn-smart { font-weight: 600; transition: all 0.3s; }
+.btn-smart.btn-success { background: linear-gradient(135deg, #667eea, #48bb78); }
+.btn-smart.btn-success:hover { opacity: 0.9; }
