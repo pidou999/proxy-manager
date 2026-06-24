@@ -172,8 +172,11 @@ curl -x http://192.168.31.239:1081 http://ip.sb
 proxy-manager/
 ├── app.py              # Flask 后端（全部 API + sing-box 管理）
 ├── setup.sh            # 一键部署脚本
-├── start-daemon.sh     # 开机自启守护脚本
+├── start-daemon.sh     # 开机自启守护脚本（直接安装模式）
 ├── uninstall.sh        # 一键卸载脚本
+├── Dockerfile          # Docker 镜像构建
+├── docker-compose.yml  # Docker Compose 编排
+├── docker-entrypoint.sh # Docker 容器启动脚本
 ├── requirements.txt    # Python 依赖
 ├── static/
 │   ├── css/style.css   # 样式
@@ -209,6 +212,80 @@ curl -X POST http://127.0.0.1:5003/api/core/start
 # 5. 查看状态
 curl -s http://127.0.0.1:5003/api/core/status | python3 -m json.tool
 ```
+
+---
+
+## 🐳 Docker 部署
+
+适合不想污染宿主机 Python 环境，或者想用容器化管理的用户。
+
+### 前置要求
+
+- Docker 20+
+- Docker Compose v2
+
+### 一键启动
+
+```bash
+git clone https://github.com/pidou999/proxy-manager.git
+cd proxy-manager
+docker compose up -d
+```
+
+首次启动会自动：
+1. 构建 Python 3.11 镜像
+2. 安装 Python 依赖
+3. 启动 Flask Web 服务（容器内端口 5003）
+4. 自动下载 sing-box 二进制
+5. 启动代理引擎（监听容器 host 网络的 1080/1081）
+
+查看容器日志：
+
+```bash
+docker compose logs -f
+```
+
+停止 / 重启：
+
+```bash
+docker compose down      # 停止
+docker compose restart   # 重启
+docker compose up -d     # 重新启动
+```
+
+### 配置说明
+
+`docker-compose.yml` 关键点：
+
+- **`network_mode: host`** — 让 sing-box 直接监听主机网络，局域网设备可直接连接到 `IP:1080/1081`
+- **`./data:/app/data`** — 数据库持久化，重建容器不丢数据
+- **`./bin:/app/bin`** — sing-box 二进制目录持久化，避免每次重建都重新下载
+- **`restart: unless-stopped`** — 自动重启（Docker 模式下的"开机自启"）
+
+### 容器内访问
+
+| 服务 | 地址 |
+|------|------|
+| Web 管理 | `http://localhost:5003` 或 `http://<宿主机IP>:5003` |
+| SOCKS5 代理 | `localhost:1080` 或 `<宿主机IP>:1080` |
+| HTTP 代理 | `localhost:1081` 或 `<宿主机IP>:1081` |
+
+### Docker 模式注意事项
+
+- **开机自启按钮**：Docker 模式下由 `restart: unless-stopped` 控制，Web 按钮显示为常亮状态
+- **数据目录**：宿主机 `./data` 和 `./bin` 即持久化目录
+- **更新镜像**：修改代码后执行 `docker compose build && docker compose up -d`
+
+### 与直接安装的区别
+
+| 功能 | 直接安装 | Docker 安装 |
+|------|---------|------------|
+| Python 环境 | 需要本机 Python | 容器内自带 |
+| 依赖安装 | pip install | 自动构建 |
+| sing-box | Web 下载 | 容器内自动下载 |
+| 开机自启 | crontab @reboot | restart: unless-stopped |
+| 局域网访问 | 监听 0.0.0.0 | host 网络模式 |
+| 数据持久化 | 本机目录 | 挂载卷 |
 
 ---
 

@@ -729,6 +729,7 @@ def core_status():
 # ---------- Auto-start (crontab @reboot) ----------
 DAEMON_SCRIPT = os.path.join(basedir, 'start-daemon.sh')
 CRONTAB_MARKER = '# proxy-manager-autostart'
+IS_DOCKER = os.path.exists('/.dockerenv') or os.environ.get('PROXY_MANAGER_DOCKER') == '1'
 
 def _autostart_crontab_entry():
     """Return the crontab line for autostart."""
@@ -765,6 +766,9 @@ def _set_autostart(enable: bool):
 
 @app.route('/api/settings/autostart', methods=['GET'])
 def get_autostart():
+    if IS_DOCKER:
+        # Docker 模式：使用 restart: unless-stopped 自动重启，autostart 无意义
+        return jsonify({'enabled': True, 'docker': True, 'message': 'Docker 模式使用 docker-compose restart 自动启动'})
     enabled = _is_autostart_enabled()
     return jsonify({'enabled': enabled})
 
@@ -772,6 +776,9 @@ def get_autostart():
 def set_autostart():
     data = request.get_json()
     enable = data.get('enabled', True)
+    if IS_DOCKER:
+        return jsonify({'enabled': True, 'docker': True,
+                        'message': 'Docker 模式自动启动由 docker-compose restart 控制'})
     ok = _set_autostart(enable)
     if ok:
         return jsonify({'enabled': enable, 'message': '开机自启已' + ('开启' if enable else '关闭')})
