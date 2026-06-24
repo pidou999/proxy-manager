@@ -9,18 +9,22 @@
 ## 📦 快速开始
 
 ```bash
-git clone https://github.com/你的用户名/proxy-manager.git
+git clone https://github.com/pidou999/proxy-manager.git
 cd proxy-manager
 bash setup.sh
 ```
 
 等脚本跑完，浏览器打开 `http://<你的IP>:5003`：
 
-1. 点击 **⬇ 下载引擎** — 自动下载 sing-box 二进制
-2. 点击 **➕ 添加** — 粘贴你的代理链接（支持六种协议）
-3. 点击 **▶ 启动** — 代理即刻生效
+1. 点击 **➕ 添加** — 粘贴你的代理链接（支持六种协议）
+2. 点击 **▶ 启动** — 代理即刻生效
 
-> `setup.sh` 会自动创建 Python 虚拟环境、安装依赖、启动 Web 服务。
+> `setup.sh` 会自动：
+> - 检测 Python 虚拟环境（飞牛 OS 优先用系统 venv，其他自动创建）
+> - 安装 Python 依赖
+> - 启动 Web 服务
+> - 下载 sing-box 引擎
+> - 启动代理引擎
 
 ---
 
