@@ -224,7 +224,26 @@ curl -s http://127.0.0.1:5003/api/core/status | python3 -m json.tool
 - Docker 20+
 - Docker Compose v2
 
-### 一键启动
+### 快速开始（推荐用 Docker Hub 镜像）
+
+```bash
+# 1. 创建独立的数据/引擎目录（避免污染宿主机）
+mkdir -p ~/docker/proxy-manager/{data,bin}
+
+# 2. 拉取镜像
+sudo docker pull hedou999/proxy-manager:latest
+
+# 3. 启动容器
+sudo docker run -d \
+  --name proxy-manager \
+  --network host \
+  --restart unless-stopped \
+  -v ~/docker/proxy-manager/data:/app/data \
+  -v ~/docker/proxy-manager/bin:/app/bin \
+  hedou999/proxy-manager:latest
+```
+
+或者直接用 docker-compose（项目根目录有 `docker-compose.yml`）：
 
 ```bash
 git clone https://github.com/pidou999/proxy-manager.git
@@ -232,35 +251,66 @@ cd proxy-manager
 docker compose up -d
 ```
 
-首次启动会自动：
-1. 构建 Python 3.11 镜像
-2. 安装 Python 依赖
-3. 启动 Flask Web 服务（容器内端口 5003）
-4. 自动下载 sing-box 二进制
-5. 启动代理引擎（监听容器 host 网络的 1080/1081）
+### 在飞牛/极空间 Docker 面板部署
 
-查看容器日志：
+镜像名：**`hedou999/proxy-manager:latest`**
 
-```bash
-docker compose logs -f
+1. **镜像** → 拉取 → 填 `hedou999/proxy-manager:latest` → 等待拉取完成
+2. **容器** → 添加容器：
+   - **网络**：必须选 `host`（让 sing-box 直接监听主机端口，局域网设备可直连）
+   - **挂载**：
+     - 宿主机路径 `/vol1/docker/proxy-manager/data` → 容器路径 `/app/data`
+     - 宿主机路径 `/vol1/docker/proxy-manager/bin` → 容器路径 `/app/bin`
+   - **重启策略**：`always` 或 `unless-stopped`
+3. 启动容器 → 浏览器开 `http://NAS_IP:5003`
+
+### 推荐挂载目录布局
+
+把数据和引擎放在独立目录，**不放在项目目录下**，好处是：
+- ✅ 项目目录可以随时 `git pull` 升级，不会冲突
+- ✅ 数据目录独立备份/迁移更方便
+- ✅ 项目目录删除不会丢数据
+
+```
+/vol1/docker/proxy-manager/
+├── data/    # SQLite 数据库（代理链接、配置）
+└── bin/     # sing-box 二进制 + 运行时配置/日志/PID
 ```
 
-停止 / 重启：
+> ⚠️ 别人 clone 这个项目时**不会**拿到你的代理链接、服务器地址等隐私数据。
+> `data/` 和 `bin/` 都不在仓库里，Docker 镜像里也是空的。
+
+### 升级流程
+
+项目升级（比如新增功能或修复 bug）后：
 
 ```bash
-docker compose down      # 停止
-docker compose restart   # 重启
-docker compose up -d     # 重新启动
+# 1. 拉取最新代码
+cd proxy-manager
+git pull origin main
+
+# 2. 停止并删除旧容器（数据在挂载目录里，不会丢）
+sudo docker stop proxy-manager
+sudo docker rm proxy-manager
+
+# 3. 拉取最新镜像
+sudo docker pull hedou999/proxy-manager:latest
+
+# 4. 重新启动
+sudo docker run -d \
+  --name proxy-manager \
+  --network host \
+  --restart unless-stopped \
+  -v ~/docker/proxy-manager/data:/app/data \
+  -v ~/docker/proxy-manager/bin:/app/bin \
+  hedou999/proxy-manager:latest
 ```
 
-### 配置说明
-
-`docker-compose.yml` 关键点：
-
-- **`network_mode: host`** — 让 sing-box 直接监听主机网络，局域网设备可直接连接到 `IP:1080/1081`
-- **`./data:/app/data`** — 数据库持久化，重建容器不丢数据
-- **`./bin:/app/bin`** — sing-box 二进制目录持久化，避免每次重建都重新下载
-- **`restart: unless-stopped`** — 自动重启（Docker 模式下的"开机自启"）
+或在 Docker 面板：
+1. 容器 → 停掉 `proxy-manager`
+2. 删除容器
+3. 镜像 → 拉取 → 选最新版本
+4. 重新创建容器（配置不变）
 
 ### 容器内访问
 
@@ -270,11 +320,16 @@ docker compose up -d     # 重新启动
 | SOCKS5 代理 | `localhost:1080` 或 `<宿主机IP>:1080` |
 | HTTP 代理 | `localhost:1081` 或 `<宿主机IP>:1081` |
 
+### 配置文件说明
+
+镜像内 sing-box 二进制预装在 `/usr/local/bin/sing-box`（约 60 MB），容器启动时自动复制到 `/app/bin/sing-box`。**容器内不需要下载**任何东西。
+
 ### Docker 模式注意事项
 
 - **开机自启按钮**：Docker 模式下由 `restart: unless-stopped` 控制，Web 按钮显示为常亮状态
 - **数据目录**：宿主机 `./data` 和 `./bin` 即持久化目录
-- **更新镜像**：修改代码后执行 `docker compose build && docker compose up -d`
+- **网络模式**：必须用 `host`，否则 sing-box 监听 1080/1081 在容器内，局域网设备连不上
+- **镜像体积**：约 100 MB（含 Python 3.11 + Flask + sing-box）
 
 ### 与直接安装的区别
 
@@ -282,10 +337,15 @@ docker compose up -d     # 重新启动
 |------|---------|------------|
 | Python 环境 | 需要本机 Python | 容器内自带 |
 | 依赖安装 | pip install | 自动构建 |
-| sing-box | Web 下载 | 容器内自动下载 |
+| sing-box | Web 下载 | 镜像内预装 |
 | 开机自启 | crontab @reboot | restart: unless-stopped |
 | 局域网访问 | 监听 0.0.0.0 | host 网络模式 |
 | 数据持久化 | 本机目录 | 挂载卷 |
+
+### 镜像标签说明
+
+- `hedou999/proxy-manager:latest` — 始终是最新稳定版
+- `hedou999/proxy-manager:v1.x.x` — 特定版本（如果有）
 
 ---
 
