@@ -900,6 +900,19 @@ def core_download():
     arch_map = {'x86_64': 'amd64', 'aarch64': 'arm64', 'armv7l': 'armv7'}
     a = arch_map.get(arch, 'amd64')
 
+    # Build proxy handlers from environment (HTTPS_PROXY/HTTP_PROXY/ALL_PROXY)
+    proxy_url = (os.environ.get('HTTPS_PROXY') or os.environ.get('https_proxy')
+                 or os.environ.get('HTTP_PROXY') or os.environ.get('http_proxy')
+                 or os.environ.get('ALL_PROXY') or os.environ.get('all_proxy'))
+    https_handler = urllib.request.HTTPSHandler()
+    http_handler = urllib.request.HTTPHandler()
+    if proxy_url:
+        proxy_handler = urllib.request.ProxyHandler({
+            'http': proxy_url, 'https': proxy_url
+        })
+        opener = urllib.request.build_opener(proxy_handler, http_handler, https_handler)
+        urllib.request.install_opener(opener)
+
     # Get latest version
     try:
         req = urllib.request.Request(

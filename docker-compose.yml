@@ -3,18 +3,26 @@ services:
     build: .
     container_name: proxy-manager
     restart: unless-stopped
-    # host 网络：让 sing-box 直接监听主机 0.0.0.0:1080/1081
-    # 局域网其他设备能直接连接到代理端口
-    network_mode: host
+    # 默认用 bridge 网络（兼容飞牛面板），sing-box 在容器内监听 0.0.0.0
+    # 注意：bridge 模式下，代理端口只能从飞牛 NAS 自身访问（不能直接给局域网）
+    # 如果要让局域网其他设备用代理，建议改用 host 网络（见下方说明）
+    ports:
+      - "5003:5003"    # Web 管理界面
+      - "1080:1080"    # SOCKS5 代理
+      - "1081:1081"    # HTTP 代理
     volumes:
-      # 持久化数据（数据库）
       - ./data:/app/data
-      # 引擎目录（sing-box 二进制 + 配置 + 日志）
       - ./bin:/app/bin
     environment:
       - TZ=Asia/Shanghai
-    # 容器内端口（host 模式下不生效，留作参考）
-    ports:
-      - "5003:5003"
-      - "1080:1080"
-      - "1081:1081"
+
+# ========================================
+# 如果想用 host 网络（让局域网其他设备直接连代理端口）：
+# 1. 在飞牛 NAS 上 SSH 跑：
+#      sudo tee /etc/docker/daemon.json <<EOF
+#      {"default-runtime": "runc"}
+#      EOF
+#      sudo systemctl restart docker
+# 2. 把上面 ports 那段删掉，network_mode 改成 host：
+#      network_mode: host
+# ========================================
