@@ -4,11 +4,6 @@ __pycache__
 .DS_Store
 .venv
 venv/
-*.log
 data/*.db
-bin/sing-box
-bin/config.json
-bin/sing-box.log
-bin/sing-box.pid
 .git
 .gitignore
