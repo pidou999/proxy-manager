@@ -742,7 +742,11 @@ def get_sing_box_pid():
 def core_status():
     running = is_sing_box_running()
     pid = get_sing_box_pid()
-    # Check if binary exists
+    # 每次 status 检查时重新查找 sing-box
+    global SING_BOX_PATH
+    found_path = find_executable('sing-box')
+    if found_path:
+        SING_BOX_PATH = found_path
     binary_exists = os.path.exists(SING_BOX_PATH)
     return jsonify({
         'running': running,
@@ -977,6 +981,11 @@ def core_download():
 
 @app.route('/api/core/start', methods=['POST'])
 def core_start():
+    # 每次启动前重新查找 sing-box（可能在 entrypoint 复制后才就位）
+    global SING_BOX_PATH
+    found_path = find_executable('sing-box')
+    if found_path:
+        SING_BOX_PATH = found_path
     if not os.path.exists(SING_BOX_PATH):
         return jsonify({'error': 'sing-box binary not found. Click "下载引擎" first.'}), 400
 
