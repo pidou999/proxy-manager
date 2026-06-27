@@ -3,12 +3,13 @@ __pycache__/
 *.pyc
 venv/
 
-# 运行时数据
+# 运行时数据（用户的代理链接和测速数据）
 data/proxies.db
 data/*.db
 
-# 代理引擎二进制（用户自行下载）
-bin/sing-box
+# sing-box 二进制随仓库一起发布（克隆即可用，零网络依赖）
+# bin/sing-box ← 不忽略，提交到仓库
+# 但排除运行时临时文件
 bin/sing-box.log
 bin/sing-box.pid
 bin/config.json
