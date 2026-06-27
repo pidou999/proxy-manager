@@ -25,7 +25,32 @@ db = SQLAlchemy(app)
 
 # ---------- Paths ----------
 BIN_DIR = os.path.join(basedir, 'bin')
-SING_BOX_PATH = os.path.join(BIN_DIR, 'sing-box')
+
+
+def find_executable(name):
+    """智能搜索可执行文件路径
+    优先级：项目 bin/ > 容器预装位置 > 系统 PATH
+    这样无论宿主机直装、Docker 容器、还是其他方式部署都能找到
+    """
+    candidates = [
+        os.path.join(BIN_DIR, name),          # 项目本地（宿主机首选）
+        f'/app/bin/{name}',                    # 容器内挂载点
+        f'/usr/local/bin/{name}',              # 镜像预装位置
+        f'/usr/bin/{name}',                    # 系统 apt/apk 安装
+    ]
+    # 加 PATH 中查找
+    import shutil
+    which_path = shutil.which(name)
+    if which_path:
+        candidates.append(which_path)
+
+    for path in candidates:
+        if path and os.path.isfile(path) and os.access(path, os.X_OK):
+            return path
+    return None
+
+
+SING_BOX_PATH = find_executable('sing-box') or os.path.join(BIN_DIR, 'sing-box')
 CONFIG_PATH = os.path.join(BIN_DIR, 'config.json')
 LOG_PATH = os.path.join(BIN_DIR, 'sing-box.log')
 PID_PATH = os.path.join(BIN_DIR, 'sing-box.pid')
@@ -937,10 +962,15 @@ def core_download():
                     if member.name.endswith('sing-box') and not member.name.startswith('.'):
                         f = tar.extractfile(member)
                         if f:
-                            with open(SING_BOX_PATH, 'wb') as out:
+                            # 优先写到项目 bin/（可写 + 持久化）
+                            target_path = os.path.join(BIN_DIR, 'sing-box')
+                            with open(target_path, 'wb') as out:
                                 out.write(f.read())
+                            os.chmod(target_path, 0o755)
+                            # 更新全局变量
+                            global SING_BOX_PATH
+                            SING_BOX_PATH = target_path
                         break
-        os.chmod(SING_BOX_PATH, 0o755)
         return jsonify({'message': f'Downloaded sing-box v{version}', 'path': SING_BOX_PATH})
     except Exception as e:
         return jsonify({'error': f'Download failed: {str(e)}'}), 500
