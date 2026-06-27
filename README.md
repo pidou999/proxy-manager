@@ -23,8 +23,20 @@ bash setup.sh
 > - 检测 Python 虚拟环境（飞牛 OS 优先用系统 venv，其他自动创建）
 > - 安装 Python 依赖
 > - 启动 Web 服务
-> - 下载 sing-box 引擎
+> - 检测 sing-box 引擎（仓库已自带，**无需联网下载**）
 > - 启动代理引擎
+
+### ✅ 仓库自带 sing-box 引擎
+
+`bin/sing-box` 已经随仓库一起发布（~58 MB，amd64），**克隆即可用，零网络依赖**。
+
+如果你想升级到最新版：
+
+```bash
+bash tools/update-sing-box.sh              # 取最新版本
+# 或指定版本
+bash tools/update-sing-box.sh 1.13.13
+```
 
 ---
 
@@ -278,11 +290,11 @@ docker compose up -d
 ```
 /vol1/docker/proxy-manager/
 ├── data/    # SQLite 数据库（代理链接、配置）
-└── bin/     # sing-box 二进制 + 运行时配置/日志/PID
+└── bin/     # sing-box 运行时配置/日志/PID（镜像预装，会自动复制过来）
 ```
 
 > ⚠️ 别人 clone 这个项目时**不会**拿到你的代理链接、服务器地址等隐私数据。
-> `data/` 和 `bin/` 都不在仓库里，Docker 镜像里也是空的。
+> `data/` 不在仓库里（数据库是空白的）；`bin/sing-box` 是公开的代理引擎二进制。
 
 ### 升级流程
 
