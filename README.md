@@ -142,8 +142,8 @@ export NO_PROXY=localhost,127.0.0.1,.local,192.168.0.0/16
 mkdir -p /etc/systemd/system/docker.service.d
 cat > /etc/systemd/system/docker.service.d/proxy.conf <<EOF
 [Service]
-Environment="HTTP_PROXY=http://192.168.31.239:1081"
-Environment="HTTPS_PROXY=http://192.168.31.239:1081"
+Environment="HTTP_PROXY=http://192.168.101.4:1081"
+Environment="HTTPS_PROXY=http://192.168.101.4:1081"
 Environment="NO_PROXY=localhost,127.0.0.1,.local"
 EOF
 systemctl daemon-reload
@@ -177,7 +177,7 @@ curl -x http://127.0.0.1:1081 http://ip.sb
 ### 局域网其他设备连接
 
 ```bash
-curl -x http://192.168.31.239:1081 http://ip.sb
+curl -x http://192.168.101.4:1081 http://ip.sb
 ```
 
 ---

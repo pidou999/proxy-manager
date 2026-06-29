@@ -41,7 +41,7 @@ fi
 NETWORK_READY=false
 for i in $(seq 1 60); do
     if ping -c 1 -W 2 223.5.5.5 >/dev/null 2>&1 || \
-       ping -c 1 -W 2 192.168.31.1 >/dev/null 2>&1; then
+       ping -c 1 -W 2 192.168.101.1 >/dev/null 2>&1; then
         NETWORK_READY=true
         echo "[boot] network ready after ${i}s" >> "$LOG"
         break
