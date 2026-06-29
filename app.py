@@ -9,7 +9,6 @@ import time
 import urllib.parse
 import subprocess
 import signal
-import logging
 from pathlib import Path
 from flask import Flask, render_template, request, jsonify
 from flask_sqlalchemy import SQLAlchemy

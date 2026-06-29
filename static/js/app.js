@@ -26,14 +26,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const modalImportConfirm = document.getElementById('modal-import-confirm');
     const modalImportCancel = document.getElementById('modal-import-cancel');
 
-    const modalDeploy = document.getElementById('modal-deploy');
-    const deployContainer = document.getElementById('deploy-container');
-    const deployConfigPath = document.getElementById('deploy-config-path');
-    const deployContainerPath = document.getElementById('deploy-container-path');
-    const deployMsg = document.getElementById('deploy-message');
-    const deployOutput = document.getElementById('deploy-output');
-    const modalDeployConfirm = document.getElementById('modal-deploy-confirm');
-    const modalDeployCancel = document.getElementById('modal-deploy-cancel');
+    
 
     const modalEditGroup = document.getElementById('modal-edit-group');
     const editGroupName = document.getElementById('edit-group-name');
@@ -70,14 +63,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Request failed');
         return data;
-    }
-
-    async function apiText(method, path, body = null) {
-        const opts = { method, headers: {} };
-        if (body) opts.body = body;
-        const res = await fetch(path, opts);
-        if (!res.ok) throw new Error('Request failed');
-        return await res.text();
     }
 
     // ─── Load & Render ──────────────────────────────────

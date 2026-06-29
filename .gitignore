@@ -2,6 +2,7 @@
 __pycache__/
 *.pyc
 venv/
+source/
 
 # 运行时数据（用户的代理链接和测速数据）
 data/proxies.db
